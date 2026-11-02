@@ -1,0 +1,6 @@
+import {DatabaseSync} from 'node:sqlite';import {readFileSync} from 'node:fs';import assert from 'node:assert/strict';import {visit} from '../internal/counter.js';
+const db=new DatabaseSync(':memory:');db.exec(readFileSync('drizzle/0000_visits.sql','utf8').replaceAll('--> statement-breakpoint',''));
+const env={DB:{prepare(sql){return{bind(...args){return{sql,args};},sql,args:[]};},async batch(statements){return statements.map(s=>s.sql.startsWith('SELECT')?{results:db.prepare(s.sql).all(...s.args)}:{results:[],result:db.prepare(s.sql).run(...s.args)});}}};
+const id='11111111-1111-4111-8111-111111111111';const req=id=>new Request('https://example.test/api/visit',{method:'POST',headers:{Origin:'https://example.test','Content-Type':'application/json'},body:JSON.stringify({id})});
+assert.equal((await (await visit(req(id),env)).json()).count,1);assert.equal((await (await visit(req(id),env)).json()).count,1);assert.equal((await (await visit(req('22222222-2222-4222-8222-222222222222'),env)).json()).count,2);
+assert.equal((await visit(req('bad'),env)).status,400);assert.equal((await visit(new Request('https://example.test/api/visit',{method:'POST',body:'{}'}),env)).status,403);assert.equal((await visit(req(id),{})).status,503);console.log('PASS SQLite persistent counter schema, atomic deduplication, origin check, invalid ID and unavailable storage');db.close();

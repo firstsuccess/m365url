@@ -1,0 +1,15 @@
+internal/package/
+internal/*.tgz
+internal/msal-package.json
+.sites-workflow/
+outputs/
+.env*
+*.log
+*.tmp
+*.zip
+*.tar.gz
+*.token
+*secret*
+*.local.*
+.DS_Store
+Thumbs.db
