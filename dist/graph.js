@@ -1,6 +1,8 @@
 import {shareToken,guid,decode} from './parser.js';
-async function graphError(response){
+function operation(url){const p=url.pathname;return p.includes('/shares/')?'shared-item':p.endsWith('/root')?'drive-root':/\/drives\/[^/]+$/.test(p)?'drive-info':p.includes('/drives/')?'drive-item':p.endsWith('/drives')?'site-drives':p.includes('/sites/')?'site-info':p.includes('/channels/')?'channel-info':p.includes('/teams/')?'team-info':'graph';}
+async function graphError(response,url){
  const error=Error(String(response.status));error.status=response.status;
+ error.operation=operation(url);
  let body;try{body=await response.json();}catch{}
  error.errorCode=body?.error?.code;
  error.requestId=response.headers.get('request-id')||body?.error?.innerError?.['request-id'];
@@ -8,7 +10,7 @@ async function graphError(response){
 }
 export async function getGraph(path,token,fetcher=fetch){
  const url=new URL(path,'https://graph.microsoft.com/v1.0/');if(url.origin!=='https://graph.microsoft.com'||!url.pathname.startsWith('/v1.0/'))throw Error('graph');
- for(let attempt=0;attempt<3;attempt++){const r=await fetcher(url,{headers:{Authorization:`Bearer ${token}`},redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(30000)});if(r.status===429&&attempt<2){const raw=r.headers.get('Retry-After');const delay=/^\d+$/.test(raw||'')?Number(raw)*1000:Date.parse(raw)-Date.now();if(!Number.isFinite(delay)||delay>60000)throw await graphError(r);await new Promise(resolve=>setTimeout(resolve,Math.max(1000,delay)));continue;}if(!r.ok)throw await graphError(r);return r.json();}throw Error('429');
+ for(let attempt=0;attempt<3;attempt++){const r=await fetcher(url,{headers:{Authorization:`Bearer ${token}`,...(url.pathname.startsWith('/v1.0/shares/')?{Prefer:'redeemSharingLinkIfNecessary'}:{})},redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(30000)});if(r.status===429&&attempt<2){const raw=r.headers.get('Retry-After');const delay=/^\d+$/.test(raw||'')?Number(raw)*1000:Date.parse(raw)-Date.now();if(!Number.isFinite(delay)||delay>60000)throw await graphError(r,url);await new Promise(resolve=>setTimeout(resolve,Math.max(1000,delay)));continue;}if(!r.ok)throw await graphError(r,url);return r.json();}throw Error('429');
 }
 export function graphPaths(item,root,drive){
  const out={};if(!item.webUrl||!root.webUrl)return out;const u=new URL(item.webUrl),r=new URL(root.webUrl),p=decode(u.pathname),rp=decode(r.pathname).replace(/\/$/,'');
@@ -24,6 +26,6 @@ export async function enrich(result,token,task,fetcher=fetch){
  const u=new URL(task.url),direct=result.fields.find(f=>f.key==='Full File URL');let item;
  if(useShares(result,task.url))item=await get('shares/'+shareToken(task.url)+'/driveItem');
  else {const siteUrl=result.fields.find(f=>f.key==='Site URL')?.value;if(!siteUrl)throw Error('unsupported');const site=new URL(siteUrl);const s=await get('sites/'+site.hostname+(site.pathname==='/'?'':':'+site.pathname));add('files','Site ID',s.id);let next='sites/'+E(s.id)+'/drives',drives=[];while(next){const page=await get(next);drives.push(...page.value);next=page['@odata.nextLink'];if(drives.length>1000)throw Error('limit');}const path=decode(new URL(direct.value).pathname);const d=drives.filter(d=>{const v=new URL(d.webUrl);return v.origin===u.origin&&path.startsWith(decode(v.pathname).replace(/\/$/,'')+'/');}).sort((a,b)=>b.webUrl.length-a.webUrl.length)[0];if(!d)throw Error('404');const relative=path.slice(decode(new URL(d.webUrl).pathname).replace(/\/$/,'').length);item=await get('drives/'+E(d.id)+'/root:'+relative.split('/').map(E).join('/'));}
- const driveId=item.parentReference?.driveId;if(!driveId||!item.id)throw Error('unsupported');const drive=await get('drives/'+E(driveId)),root=await get('drives/'+E(driveId)+'/root');
- add('files','Drive ID',driveId);add('files','DriveItem ID',item.id);add('files',item.folder?'Folder Name':'File Name',item.name);add('files','Item Type',item.folder?'Folder':'File');for(const [k,v]of Object.entries(item.sharepointIds||{}))add('files',({listId:'List ID',listItemId:'ListItem ID',listItemUniqueId:'ListItem Unique ID',siteId:'Site collection ID',webId:'Web ID'})[k]||k,v);for(const [k,v]of Object.entries(graphPaths(item,root,drive)))add('paths',k,v);
+ const driveId=item.parentReference?.driveId;if(!driveId||!item.id)throw Error('unsupported');
+ add('files','Drive ID',driveId);add('files','DriveItem ID',item.id);add('files',item.folder?'Folder Name':'File Name',item.name);add('files','Item Type',item.folder?'Folder':'File');for(const [k,v]of Object.entries(item.sharepointIds||{}))add('files',({listId:'List ID',listItemId:'ListItem ID',listItemUniqueId:'ListItem Unique ID',siteId:'Site collection ID',webId:'Web ID'})[k]||k,v);const drive=await get('drives/'+E(driveId)),root=await get('drives/'+E(driveId)+'/root');for(const [k,v]of Object.entries(graphPaths(item,root,drive)))add('paths',k,v);
 }
