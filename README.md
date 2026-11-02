@@ -1,5 +1,4 @@
-# Microsoft 365 URL Analyzer
-
+# もんじゃ Microsoft 365 URL Analyzer / Monja Microsoft 365 URL Analyzer
 Microsoft Teams、SharePoint Online、OneDriveのURLから識別子やパスを確認する無料ツールです。
 
 [サイトを開く](https://m365url.mnoda1979.chatgpt.site/)
