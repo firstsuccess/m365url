@@ -4,11 +4,11 @@ import {plan,enrich} from './graph.js';
 import {translations} from './i18n.js';
 const $=id=>document.getElementById(id),KEY='m365url.public-settings.v1';let lang='ja',settings={...defaults},result=null,tab='basic',busy=false;
 const t=k=>translations[lang][k]||k;
-const message=(key,target='status')=>$(target).textContent=t(key);
+const message=(key,target='status')=>{$(target).dataset.message=key;$(target).textContent=t(key);};
 const node=(tag,text,className)=>{const n=document.createElement(tag);n.textContent=text;if(className)n.className=className;return n;};
 try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved)settings=validate(saved);}catch{}
 function setBusy(value){busy=value;for(const id of ['graph','analyze','clear','paste','settings'])$(id).disabled=value; $('graph').disabled=value||!result||!plan(result);for(const el of $('configForm').elements)el.disabled=value;$('url').disabled=value;}
-function translate(){document.documentElement.lang=lang==='zh'?'zh-Hans':lang;document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));fields();help();render();}
+function translate(){document.documentElement.lang=lang==='zh'?'zh-Hans':lang;document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));for(const id of ['status','configStatus'])if($(id).textContent&&$(id).dataset.message)$(id).textContent=t($(id).dataset.message);fields();help();render();}
 function fields(){const wrap=$('configFields');wrap.replaceChildren();for(const key of ['clientId','mode','tenantId','redirectUri','platform']){const row=node('div','','field'),label=node('label',t(key));label.htmlFor=key;row.append(label);let input;if(key==='mode'||key==='platform'){input=document.createElement('select');const opts=key==='mode'?[['multi',t('multi')],['single',t('single')]]:[['SPA','SPA'],['Web','Web']];for(const [v,s]of opts){const op=node('option',s);op.value=v;input.append(op);}}else{input=document.createElement('input');input.autocomplete='off';input.spellcheck=false;}input.id=key;input.value=settings[key];row.append(input);const reset=node('button','↺');reset.type='button';reset.title=t('reset');reset.setAttribute('aria-label',t('reset')+': '+t(key));reset.onclick=()=>{input.value=defaults[key];authority();};row.append(reset);input.oninput=authority;wrap.append(row);}authority();}
 function authority(){const mode=$('mode').value,tenant=$('tenantId').value;$('authority').textContent='Authority: https://login.microsoftonline.com/'+(mode==='single'?tenant:'organizations');}
 function formSettings(){return Object.fromEntries(['clientId','mode','tenantId','redirectUri','platform'].map(k=>[k,$(k).value.trim()]));}
