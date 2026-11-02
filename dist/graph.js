@@ -1,7 +1,14 @@
 import {shareToken,guid,decode} from './parser.js';
+async function graphError(response){
+ const error=Error(String(response.status));error.status=response.status;
+ let body;try{body=await response.json();}catch{}
+ error.errorCode=body?.error?.code;
+ error.requestId=response.headers.get('request-id')||body?.error?.innerError?.['request-id'];
+ return error;
+}
 export async function getGraph(path,token,fetcher=fetch){
  const url=new URL(path,'https://graph.microsoft.com/v1.0/');if(url.origin!=='https://graph.microsoft.com'||!url.pathname.startsWith('/v1.0/'))throw Error('graph');
- for(let attempt=0;attempt<3;attempt++){const r=await fetcher(url,{headers:{Authorization:`Bearer ${token}`},redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(30000)});if(r.status===429&&attempt<2){const raw=r.headers.get('Retry-After');const delay=/^\d+$/.test(raw||'')?Number(raw)*1000:Date.parse(raw)-Date.now();if(!Number.isFinite(delay)||delay>60000)throw Error('429');await new Promise(resolve=>setTimeout(resolve,Math.max(1000,delay)));continue;}if(!r.ok)throw Error(String(r.status));return r.json();}throw Error('429');
+ for(let attempt=0;attempt<3;attempt++){const r=await fetcher(url,{headers:{Authorization:`Bearer ${token}`},redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(30000)});if(r.status===429&&attempt<2){const raw=r.headers.get('Retry-After');const delay=/^\d+$/.test(raw||'')?Number(raw)*1000:Date.parse(raw)-Date.now();if(!Number.isFinite(delay)||delay>60000)throw await graphError(r);await new Promise(resolve=>setTimeout(resolve,Math.max(1000,delay)));continue;}if(!r.ok)throw await graphError(r);return r.json();}throw Error('429');
 }
 export function graphPaths(item,root,drive){
  const out={};if(!item.webUrl||!root.webUrl)return out;const u=new URL(item.webUrl),r=new URL(root.webUrl),p=decode(u.pathname),rp=decode(r.pathname).replace(/\/$/,'');

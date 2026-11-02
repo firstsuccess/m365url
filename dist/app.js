@@ -2,6 +2,7 @@ import {analyze} from './parser.js';
 import {defaults,validate,withToken} from './auth.js';
 import {plan,enrich} from './graph.js';
 import {translations} from './i18n.js';
+import {diagnostic} from './diagnostics.js';
 const $=id=>document.getElementById(id),KEY='m365url.public-settings.v1';let lang='ja',settings={...defaults},result=null,tab='basic',busy=false;
 const t=k=>translations[lang][k]||k;
 const message=(key,target='status')=>{$(target).dataset.message=key;$(target).textContent=t(key);};
@@ -27,7 +28,7 @@ $('settings').onclick=()=>{fields();$('config').showModal();};$('help').onclick=
 $('configForm').onsubmit=e=>{e.preventDefault();apply();};$('save').onclick=()=>apply(true);$('forget').onclick=()=>{try{localStorage.removeItem(KEY);message('forgot','configStatus');}catch{message('settingsError','configStatus');}};$('reset').onclick=()=>{if(!busy){settings={...defaults};try{localStorage.removeItem(KEY);}catch{}fields();message('applied','configStatus');}};
 $('language').onchange=()=>{lang=$('language').value;translate();};
 $('graph').onclick=async()=>{if(busy||!result)return;const task=plan(result);if(!task){message('unsupported');return;}setBusy(true); // Work on a fresh result to avoid mixing successive confirmations.
- const fresh=analyze(result.input);try{await withToken(settings,task.scopes,k=>message(k),token=>enrich(fresh,token,task));result=fresh;message('done');}catch(e){result=fresh;message(translations[lang][e.message]?e.message:'failed');}finally{render();setBusy(false);}};
+ const fresh=analyze(result.input);let stage='initialize';try{await withToken(settings,task.scopes,k=>{stage=k;message(k);},token=>enrich(fresh,token,task));result=fresh;message('done');}catch(e){result=fresh;message(translations[lang][e.message]?e.message:'failed');$('status').append(node('span',' ['+diagnostic(e,stage)+']'));}finally{render();setBusy(false);}};
 const callbackContext=window.parent!==window||(/(?:^|[&#])(code|error|state)=/.test(location.hash)&&!!window.opener);
 if(!callbackContext)translate();
 // The endpoint returns only the shared total; no input URL is transmitted.
