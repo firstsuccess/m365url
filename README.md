@@ -72,12 +72,14 @@ Sitesで別サイトとして公開する場合、`.openai/hosting.json` と生�
 | --- | --- |
 | SharePoint共有リンク照会 | Files.ReadWrite |
 | SharePoint直接パス・サイト照会 | Sites.Read.All |
-| Teams基本情報 | Team.ReadBasic.All |
+| Teams基本情報・関連サイト | Team.ReadBasic.All、Sites.Read.All |
 | チャネル情報 | Channel.ReadBasic.All |
 
 共有リンクの照会には[Microsoft公式仕様](https://learn.microsoft.com/graph/api/shares-get?view=graph-rest-1.0)でFiles.ReadWriteが必要です。サイトはファイル内容の更新を行いません。同意の可否は管理者のポリシーに依存し、本人がアクセスできる範囲のみ取得できます。
 
 ## Power Automateで利用する
+
+TeamsタブとSharePoint / OneDriveタブの両方に、特定できた `Site Address`・サイト名・チャネルURL・フォルダーURLを表示します。トリガーの「Site Address」にはTeamsリンクではなく `Site Address` のURLをコピーしてください。Teamsの詳細照会では `Sites.Read.All` も要求し、チャネルの `filesFolder` から実際の保存先を取得します。プライベート・共有チャネルのサイトやフォルダーをチャネル名から推測しません。取得に失敗した場合は、確認できた情報を保持してエラーを表示します。
 
 TeamsアクションではTeam ID・Channel IDなどを、SharePointのパス指定アクションではSite AddressとSite Relative Pathを確認します。表示名とライブラリのURLパスは異なる場合があります。
 
