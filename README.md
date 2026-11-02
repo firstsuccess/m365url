@@ -23,13 +23,49 @@ Graph詳細照会は組織アカウントのTeams（Group IDが必要）とShare
 既定の共通アプリのほか、自分の登録アプリを利用できます。
 
 1. Microsoft Entra管理センターでアプリを登録します。組織内のみならシングルテナント、他組織からも使う場合は組織向けマルチテナントを選択します。
-2. 「認証」のSingle-page application（SPA）に、`https://m365url.mnoda1979.chatgpt.site/` を登録します。末尾スラッシュまで一致させます。
+2. 「認証」のSingle-page application（SPA）に、利用するサイトのルートURLを登録します。共通サイトなら `https://m365url.mnoda1979.chatgpt.site/`、独自運用なら自分の公開先URLです。末尾スラッシュまで一致させます。
 3. サイトの認証設定にApplication (Client) ID、Directory (Tenant) ID、認証モードを入力します。Client Secretは不要です。
 4. 必要なMicrosoft Graph委任アクセス許可を追加し、組織のポリシーに従って同意を取得します。
 
 共通アプリのClient IDは`37c7505c-d9a8-4bad-b60e-93ec3575fc9c`、運営者Tenant IDは`9c9e5e5f-2563-4959-9cfd-54536047f126`です。マルチテナントでは`organizations`で認証し、運営者テナントを強制しません。シングルテナントにはGUID形式のTenant IDが必要です。サイト側のモード切替は登録アプリの対応アカウント設定を変更しません。
 
 Redirect URIは現在のサイトのルートURLに限定しています。Webプラットフォーム認証は利用できません。SPAを選択してください。
+
+## ダウンロードして自分のテナントで運用する
+
+第三者もこのコードをダウンロード・改変して、自分のテナントで運用できます。GPLv3の条件は [LICENSE](LICENSE) を確認してください。同梱のMSALには別途MITライセンスが適用され、`dist/vendor/MSAL-LICENSE` に収録しています。
+
+1. GitHubの「Code → Download ZIP」で取得するか、次のコマンドで複製します。
+
+   ```sh
+   git clone https://github.com/firstsuccess/m365url.git
+   cd m365url
+   ```
+
+2. 自分のテナントでEntraアプリを登録します。組織内専用ならシングルテナントを選びます。上記「Microsoft Graph アクセス許可」のうち、利用する機能の委任権限を追加します。アプリケーション権限やClient Secretは不要です。同意は自組織のポリシーに従って取得してください。運営者側の同意が別テナントへ引き継がれることはありません。
+3. HTTPSで公開するサイトのルートURLを決め、EntraアプリのSPAリダイレクトURIに登録します。ルート `/` での配信を想定しており、サブディレクトリ配信は対応していません。
+4. `dist/auth.js` の `defaults` を自分の設定に変更します。
+
+   ```js
+   export const defaults = Object.freeze({
+     clientId: '自分のApplication (Client) ID（GUID）',
+     tenantId: '自分のDirectory (Tenant) ID（GUID）',
+     mode: 'single',
+     redirectUri: 'https://自分の公開先ドメイン/',
+     platform: 'SPA'
+   });
+   ```
+
+   リポジトリの既定値は運営者の共通アプリ用です。独立運用では必ず自分の値に置き換えてください。画面の「認証設定」でも変更できますが、その変更は利用中のブラウザにのみ適用されます。既に設定を保存したブラウザでは「保存設定を削除」後に再読み込みし、新しい既定値を利用してください。他組織にも提供する場合は、Entraアプリの対応アカウント設定と `mode: 'multi'` を合わせます。
+5. 静的ホスティングには `dist/` 直下のHTML・JS・CSSと `vendor/` を配置します。`dist/server/` と `dist/.openai/` はSites公開用なので、通常の静的配信には不要です。ブラウザ用ファイルのビルドやnpm依存関係のインストールは不要です。
+
+### ローカル確認とアクセスカウンター
+
+Node.jsが使える環境では、リポジトリのルートで `node internal/preview.mjs` を実行して `http://127.0.0.1:8080/` を開けます。ローカルでGraph認証も確認する場合は、このURLをSPAリダイレクトURIに追加し、画面の認証設定にも同じURLを指定してください。`node tests/core.mjs` で基本チェックを実行できます。Graph・認証テストはモックであり、自分のテナントでの動作は別途確認が必要です。
+
+アクセスカウンターは任意機能です。現行のSites公開版はCloudflare WorkerとD1の `DB` バインディングを使い、`drizzle/0000_visits.sql` にスキーマを定義しています。通常の静的配信では `/api/visit` を用意しなくても解析・認証機能を利用でき、カウンターは表示されません。リクエスト自体も不要なら `dist/app.js` 末尾のカウンター処理を削除してください。
+
+Sitesで別サイトとして公開する場合、`.openai/hosting.json` と生成済みの `dist/.openai/hosting.json` に含まれる運営者のSite IDを流用せず、自分のSiteの設定を使ってください。`internal/package.mjs` はSites専用の公開パッケージ作成処理であり、一般的な静的ホスティングには不要です。
 
 ## Microsoft Graph アクセス許可
 
@@ -62,7 +98,7 @@ Graph DriveItem ID、SharePoint ListItem ID、SharePointコネクタのFile Iden
 - 404：ファイルの移動・削除や共有リンクの失効を確認してください。
 - 429：時間をおいて再試行してください。
 
-Cookie制限などでSSOに失敗した場合はポップアップでサインインします。ポップアップを許可し、MFA・条件付きアクセスの案内に従ってください。
+詳細照会ボタンを押すとポップアップでサインインします。既存のMicrosoftサインインセッションを利用できる場合もあります。ポップアップを許可し、MFA・条件付きアクセスの案内に従ってください。エラーには失敗段階・エラーコード、GraphエラーではHTTPステータス・APIの種類・取得できたRequest IDを表示します。
 
 ## English
 
